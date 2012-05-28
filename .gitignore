@@ -2,3 +2,4 @@ c.o
 hello_client
 hello_server
 qzmq.so
+pub_test

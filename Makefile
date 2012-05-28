@@ -1,8 +1,11 @@
 
-all: qzmq.so hello_client hello_server
+all: qzmq.so pub_test hello_client hello_server
 
 qzmq.so: qzmq.c
 	gcc -m32 -I. -lzmq -fPIC -shared -o qzmq.so qzmq.c
+
+pub_test: pub_test.c
+	gcc -lzmq -o pub_test pub_test.c
 
 hello_client: hello_client.c
 	gcc -lzmq -o hello_client hello_client.c

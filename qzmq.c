@@ -2,131 +2,131 @@
 #include <zmq.h>
 #include <string.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <sys/ioctl.h>
+#include <stdint.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "qzmq.h"
 
-K q_send_hi (void) {
+void* bind_context = NULL;
+void* bind_socket  = NULL;
 
-    void *context = zmq_init(1);
+K q_init (K thread_count_k) {
+    assert(thread_count_k->t == -KI);
 
-    //  Socket to talk to server
-    printf ("Connecting to hello world server…\n");
-    void *requester = zmq_socket (context, ZMQ_REQ);
-    zmq_connect (requester, "tcp://localhost:5555");
+    bind_context = zmq_init(thread_count_k->i);
+    return (K)0;
+}
 
-    int request_nbr;
-    for (request_nbr = 0; request_nbr != 10; request_nbr++) {
-        zmq_msg_t request;
-        zmq_msg_init_size (&request, 5);
-        memcpy (zmq_msg_data (&request), "Hello", 5);
-        printf ("Sending Hello %d…\n", request_nbr);
-        zmq_send (requester, &request, 0);
-        zmq_msg_close (&request);
+K q_socket (K socket_type_k) {
+    assert(socket_type_k->t == -KI);
 
-        zmq_msg_t reply;
-        zmq_msg_init (&reply);
-        zmq_recv (requester, &reply, 0);
-        printf ("Received World %d\n", request_nbr);
-        zmq_msg_close (&reply);
-    }
-
-    zmq_close (requester);
-    zmq_term (context);
+    bind_socket = zmq_socket(bind_context, socket_type_k->i);
+    assert(bind_socket != NULL);
 
     return (K)0;
 }
 
-void *s_context;
-void *s_responder;
+K q_setsockopt (K opt_k, K value_k) {
 
-K q_recv_hi(void)
-{
-    printf("q_recv_hi\n");
-    // listen on the port
-    s_context = zmq_init (1);
+    assert(opt_k->t == -KI);
+    assert(value_k->t == -KI || value_k->t == -KS);
 
-    //  Socket to talk to clients
-    s_responder = zmq_socket (s_context, ZMQ_REP);
-    zmq_bind (s_responder, "tcp://*:5555");
+    char    *ptr;
+    int      len;
+    uint64_t u64;
+    int64_t  i64;
+    int        i;
+    int       rc;
 
-    int option_value;
-    size_t option_len = sizeof(int);
-    zmq_getsockopt(s_responder, ZMQ_FD, &option_value, &option_len);
-    int fd = option_value;
+    switch(opt_k->i){
+        case ZMQ_LINGER:
+        case ZMQ_RECONNECT_IVL:
+        case ZMQ_BACKLOG:
+            i = value_k->i;
+            rc = zmq_setsockopt(bind_socket, opt_k->i, &i, sizeof(int));
+            break;
 
-    sd1(-fd, q_recv_cb);
-    R (K)0;
+        case ZMQ_IDENTITY:
+        case ZMQ_SUBSCRIBE:
+        case ZMQ_UNSUBSCRIBE:
+            ptr = value_k->s;
+            len = sizeof(char) * strlen(ptr);
+            rc  = zmq_setsockopt(bind_socket, opt_k->i, ptr, len);
+            break;
+
+        case ZMQ_SWAP:
+        case ZMQ_RATE:
+        case ZMQ_RECOVERY_IVL:
+        case ZMQ_RECOVERY_IVL_MSEC:
+        case ZMQ_MCAST_LOOP:
+            i64 = (int64_t) value_k->i;
+            rc = zmq_setsockopt(bind_socket, opt_k->i, &i64, sizeof(int64_t));
+            break;
+
+        case ZMQ_HWM:
+        case ZMQ_AFFINITY:
+        case ZMQ_SNDBUF:
+        case ZMQ_RCVBUF:
+            u64 = (uint64_t) value_k->i;
+            rc = zmq_setsockopt(bind_socket, opt_k->i, &u64, sizeof(uint64_t));
+            break;
+
+        default:
+            warn("Unknown sockopt type %d, assuming string. Send patch", opt_k->i);
+            ptr = value_k->s;
+            len = sizeof(char) * strlen(ptr);
+            rc  = zmq_setsockopt(bind_socket, opt_k->i, ptr, len);
+    }
+
+    assert(rc == 0);
+
+    return (K)0;
 }
 
-int i = 0;
-int j = 0;
-K q_recv_cb (int d)
-{
-    i++;
-    if (i > 100) {
-        printf("too many calls\n");
-        exit(1);
-    }
+K q_bind (K endpoint_k) {
+    assert(endpoint_k->t == -KS);
+    zmq_bind(bind_socket, endpoint_k->s);
+    put_on_ev_loop(bind_socket);
+    return (K)0;
+}
 
-    /* printf("q_recv_cb: %d\n", d); */
+K on_msg_cb (int fd) {
 
-    int err;
     int events = 0;
-    size_t option_len = sizeof(int);
+    size_t option_len;
+    int rc = zmq_getsockopt(bind_socket, ZMQ_EVENTS, &events, &option_len);
+    assert(rc == 0);
 
-    zmq_getsockopt(s_responder, ZMQ_EVENTS, &events, &option_len);
+    // ignore everything but ZMQ_POLLIN events
+    if (!(events & ZMQ_POLLIN))
+        return (K)0;
 
-    if (events & ZMQ_POLLOUT) {
-        /* printf("ZMQ_POLLOUT\n"); */
-    }
-    else if (events & ZMQ_POLLIN) {
-        /* printf("ZMQ_POLLIN\n"); */
+    while (1) {
+        zmq_msg_t message;
+        zmq_msg_init(&message);
 
-        int recv_more = 1;
-        while (recv_more) {
-            //  Wait for next request from client
-            zmq_msg_t request;
-            zmq_msg_init(&request);
+        int s = zmq_recv(bind_socket, &message, ZMQ_NOBLOCK);
+        if (s == -1 && zmq_errno() == EAGAIN)
+            break;
 
-            int s = zmq_recv(s_responder, &request, ZMQ_NOBLOCK);
+        assert(s == 0);
 
-            if (s == -1 && zmq_errno() == EAGAIN) {
-                recv_more = 0;
-            }
-            else {
-                char* msg = zmq_msg_data(&request);
+        void* msg = zmq_msg_data(&message);
+        /* printf("Received Hello: %s\n", msg); */
+        k(0, msg, (K)0);
 
-                /* printf ("Received Hello: %s\n", msg); */
-                zmq_msg_close(&request);
-
-                /* //  Do some 'work' */
-                /* sleep (1); */
-
-                //  Send reply back to client
-                zmq_msg_t reply;
-                zmq_msg_init_size(&reply, 5);
-
-                memcpy(zmq_msg_data (&reply), "World", 5);
-
-                zmq_send(s_responder, &reply, 0);
-                zmq_msg_close(&reply);
-
-                /* printf ("Replied\n\n"); */
-            }
-        }
-    }
-    else {
-        /* printf("unrecognized poll event\n"); */
+        zmq_msg_close(&message);
     }
 
+    return (K)0;
+}
 
-    R (K)0;
+void put_on_ev_loop (void *socket) {
+    int fd;
+    size_t option_len;
+    zmq_getsockopt(socket, ZMQ_FD, &fd, &option_len);
+    sd1(-fd, on_msg_cb);
+
+    return;
 }
