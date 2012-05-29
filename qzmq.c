@@ -9,7 +9,6 @@
 
 void* contexts[255];
 int   context_count = 0;
-
 void* sockets_by_fd[1024];
 
 K q_init (K thread_count_k) {
@@ -40,7 +39,6 @@ K q_socket (K context_k, K socket_type_k) {
 }
 
 K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
-
     assert(socket_fd_k->t == -KI);
     assert(opt_k->t == -KI);
     assert(value_k->t == -KI || value_k->t == -KS);
