@@ -1,4 +1,3 @@
-
 \d .zmq
 
 /
@@ -49,15 +48,8 @@ Functions
 \
 
 init:       `qzmq 2:(`q_init;1)
-socket:     `qzmq 2:(`q_socket;1)
-setsockopt: `qzmq 2:(`q_setsockopt;2)
-bind:       `qzmq 2:(`q_bind;1)
-
-\d .
-.zmq.init[1]
-s:.zmq.socket[.zmq.ZMQ_SUB]
-
-.zmq.setsockopt[.zmq.ZMQ_SUBSCRIBE;`]
-.zmq.setsockopt[.zmq.ZMQ_LINGER;1000]
-.zmq.setsockopt[.zmq.ZMQ_HWM;1000]
-.zmq.bind[`$"tcp://*:5555"]
+socket:     `qzmq 2:(`q_socket;2)
+setsockopt: `qzmq 2:(`q_setsockopt;3)
+bind:       `qzmq 2:(`q_bind;2)
+connect:    `qzmq 2:(`q_connect;2)
+send:       `qzmq 2:(`q_send;2)

@@ -5,32 +5,48 @@
 #include <stdint.h>
 #include <errno.h>
 #include <assert.h>
-
 #include "qzmq.h"
 
-void* bind_context = NULL;
-void* bind_socket  = NULL;
+void* contexts[255];
+int   context_count = 0;
+
+void* sockets_by_fd[1024];
 
 K q_init (K thread_count_k) {
     assert(thread_count_k->t == -KI);
 
-    bind_context = zmq_init(thread_count_k->i);
-    return (K)0;
+    contexts[context_count] = zmq_init(thread_count_k->i);
+    return ki(context_count++);
 }
 
-K q_socket (K socket_type_k) {
+K q_socket (K context_k, K socket_type_k) {
+    assert(context_k->t == -KI);
     assert(socket_type_k->t == -KI);
 
-    bind_socket = zmq_socket(bind_context, socket_type_k->i);
-    assert(bind_socket != NULL);
+    void *context = contexts[context_k->i];
+    void *socket  = zmq_socket(context, socket_type_k->i);
+    assert(socket != NULL);
 
-    return (K)0;
+    int fd;
+    size_t option_len;
+    int rc = zmq_getsockopt(socket, ZMQ_FD, &fd, &option_len);
+    assert(rc == 0);
+    sockets_by_fd[fd] = socket;
+
+    // tell q to call back when the socket is readable
+    sd1(-fd, on_msg_cb);
+
+    return ki(fd);
 }
 
-K q_setsockopt (K opt_k, K value_k) {
+K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
 
+    assert(socket_fd_k->t == -KI);
     assert(opt_k->t == -KI);
     assert(value_k->t == -KI || value_k->t == -KS);
+
+    int fd = socket_fd_k->i;
+    void *socket = sockets_by_fd[fd];
 
     char    *ptr;
     int      len;
@@ -44,7 +60,7 @@ K q_setsockopt (K opt_k, K value_k) {
         case ZMQ_RECONNECT_IVL:
         case ZMQ_BACKLOG:
             i = value_k->i;
-            rc = zmq_setsockopt(bind_socket, opt_k->i, &i, sizeof(int));
+            rc = zmq_setsockopt(socket, opt_k->i, &i, sizeof(int));
             break;
 
         case ZMQ_IDENTITY:
@@ -52,7 +68,7 @@ K q_setsockopt (K opt_k, K value_k) {
         case ZMQ_UNSUBSCRIBE:
             ptr = value_k->s;
             len = sizeof(char) * strlen(ptr);
-            rc  = zmq_setsockopt(bind_socket, opt_k->i, ptr, len);
+            rc  = zmq_setsockopt(socket, opt_k->i, ptr, len);
             break;
 
         case ZMQ_SWAP:
@@ -61,7 +77,7 @@ K q_setsockopt (K opt_k, K value_k) {
         case ZMQ_RECOVERY_IVL_MSEC:
         case ZMQ_MCAST_LOOP:
             i64 = (int64_t) value_k->i;
-            rc = zmq_setsockopt(bind_socket, opt_k->i, &i64, sizeof(int64_t));
+            rc = zmq_setsockopt(socket, opt_k->i, &i64, sizeof(int64_t));
             break;
 
         case ZMQ_HWM:
@@ -69,14 +85,14 @@ K q_setsockopt (K opt_k, K value_k) {
         case ZMQ_SNDBUF:
         case ZMQ_RCVBUF:
             u64 = (uint64_t) value_k->i;
-            rc = zmq_setsockopt(bind_socket, opt_k->i, &u64, sizeof(uint64_t));
+            rc = zmq_setsockopt(socket, opt_k->i, &u64, sizeof(uint64_t));
             break;
 
         default:
             warn("Unknown sockopt type %d, assuming string. Send patch", opt_k->i);
             ptr = value_k->s;
             len = sizeof(char) * strlen(ptr);
-            rc  = zmq_setsockopt(bind_socket, opt_k->i, ptr, len);
+            rc  = zmq_setsockopt(socket, opt_k->i, ptr, len);
     }
 
     assert(rc == 0);
@@ -84,18 +100,54 @@ K q_setsockopt (K opt_k, K value_k) {
     return (K)0;
 }
 
-K q_bind (K endpoint_k) {
+K q_bind (K socket_fd_k, K endpoint_k) {
+    assert(socket_fd_k->t == -KI);
     assert(endpoint_k->t == -KS);
-    zmq_bind(bind_socket, endpoint_k->s);
-    put_on_ev_loop(bind_socket);
+
+    int  fd = socket_fd_k->i;
+    void *socket = sockets_by_fd[socket_fd_k->i];
+
+    int rc = zmq_bind(socket, endpoint_k->s);
+    assert(rc == 0);
+
+    return (K)0;
+}
+
+K q_connect (K socket_fd_k, K endpoint_k) {
+    assert(socket_fd_k->t == -KI);
+    assert(endpoint_k->t == -KS);
+
+    int fd = socket_fd_k->i;
+    void *socket = sockets_by_fd[socket_fd_k->i];
+
+    int rc = zmq_connect(socket, endpoint_k->s);
+    assert(rc == 0);
+
+    return (K)0;
+}
+
+K q_send (K socket_fd_k, K msg_k) {
+    assert(socket_fd_k->t == -KI);
+    assert(msg_k->t == KC);
+
+    int fd = socket_fd_k->i;
+    void *socket = sockets_by_fd[socket_fd_k->i];
+
+    zmq_msg_t msg;
+    zmq_msg_init_size(&msg, msg_k->n);
+    memcpy(zmq_msg_data (&msg), kC(msg_k), msg_k->n);
+    zmq_send(socket, &msg, 0);
+    zmq_msg_close(&msg);
+
     return (K)0;
 }
 
 K on_msg_cb (int fd) {
 
+    void *socket = sockets_by_fd[fd];
     int events = 0;
     size_t option_len;
-    int rc = zmq_getsockopt(bind_socket, ZMQ_EVENTS, &events, &option_len);
+    int rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &option_len);
     assert(rc == 0);
 
     // ignore everything but ZMQ_POLLIN events
@@ -106,27 +158,18 @@ K on_msg_cb (int fd) {
         zmq_msg_t message;
         zmq_msg_init(&message);
 
-        int s = zmq_recv(bind_socket, &message, ZMQ_NOBLOCK);
+        int s = zmq_recv(socket, &message, ZMQ_NOBLOCK);
         if (s == -1 && zmq_errno() == EAGAIN)
             break;
 
         assert(s == 0);
 
         void* msg = zmq_msg_data(&message);
-        /* printf("Received Hello: %s\n", msg); */
+        /* printf("msg: %s\n", (char*) msg); */
         k(0, msg, (K)0);
 
         zmq_msg_close(&message);
     }
 
     return (K)0;
-}
-
-void put_on_ev_loop (void *socket) {
-    int fd;
-    size_t option_len;
-    zmq_getsockopt(socket, ZMQ_FD, &fd, &option_len);
-    sd1(-fd, on_msg_cb);
-
-    return;
 }
