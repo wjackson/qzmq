@@ -118,7 +118,6 @@ K q_bind (K socket_fd_k, K endpoint_k) {
 K q_connect (K socket_fd_k, K endpoint_k) {
     assert(socket_fd_k->t == -KI);
     assert(endpoint_k->t == KC);
-    int rc;
 
     int fd = socket_fd_k->i;
     void *socket = sockets_by_fd[socket_fd_k->i];
@@ -127,7 +126,7 @@ K q_connect (K socket_fd_k, K endpoint_k) {
     endpoint[endpoint_k->n] = '\0';
     strncpy(endpoint, kC(endpoint_k), endpoint_k->n);
 
-    rc = zmq_connect(socket, endpoint);
+    int rc = zmq_connect(socket, endpoint);
     assert(rc == 0);
 
     return (K)0;
@@ -170,9 +169,15 @@ K on_msg_cb (int fd) {
 
         assert(s == 0);
 
-        void* msg = zmq_msg_data(&message);
-        /* printf("msg: %s\n", (char*) msg); */
-        k(0, msg, (K)0);
+        char* msg = zmq_msg_data(&message);
+
+        K msg_cb_k = k(0, ".zmq.ps", (K)0);
+        if (msg_cb_k->t == -128) {  // msg_cb doesn't exist
+            k(0, msg, (K)0);
+        }
+        else {
+            k(0, ".zmq.ps", kp(msg), (K)0);
+        }
 
         zmq_msg_close(&message);
     }
