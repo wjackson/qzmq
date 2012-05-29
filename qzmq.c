@@ -100,12 +100,16 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
 
 K q_bind (K socket_fd_k, K endpoint_k) {
     assert(socket_fd_k->t == -KI);
-    assert(endpoint_k->t == -KS);
+    assert(endpoint_k->t == KC);
 
     int  fd = socket_fd_k->i;
     void *socket = sockets_by_fd[socket_fd_k->i];
 
-    int rc = zmq_bind(socket, endpoint_k->s);
+    char endpoint[endpoint_k->n+1];
+    endpoint[endpoint_k->n] = '\0';
+    strncpy(endpoint, kC(endpoint_k), endpoint_k->n);
+
+    int rc = zmq_bind(socket, endpoint);
     assert(rc == 0);
 
     return (K)0;
@@ -113,12 +117,17 @@ K q_bind (K socket_fd_k, K endpoint_k) {
 
 K q_connect (K socket_fd_k, K endpoint_k) {
     assert(socket_fd_k->t == -KI);
-    assert(endpoint_k->t == -KS);
+    assert(endpoint_k->t == KC);
+    int rc;
 
     int fd = socket_fd_k->i;
     void *socket = sockets_by_fd[socket_fd_k->i];
 
-    int rc = zmq_connect(socket, endpoint_k->s);
+    char endpoint[endpoint_k->n+1];
+    endpoint[endpoint_k->n] = '\0';
+    strncpy(endpoint, kC(endpoint_k), endpoint_k->n);
+
+    rc = zmq_connect(socket, endpoint);
     assert(rc == 0);
 
     return (K)0;
@@ -141,7 +150,6 @@ K q_send (K socket_fd_k, K msg_k) {
 }
 
 K on_msg_cb (int fd) {
-
     void *socket = sockets_by_fd[fd];
     int events = 0;
     size_t option_len;
