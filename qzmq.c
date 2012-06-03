@@ -148,6 +148,18 @@ K q_send (K socket_fd_k, K msg_k) {
     return (K)0;
 }
 
+K q_version (void) {
+    int major, minor, patch;
+
+    char *version;
+    zmq_version(&major, &minor, &patch);
+    asprintf(&version, "%d.%d.%d", major, minor, patch);
+    K version_k =  ks(version);
+    free(version);
+
+    return version_k;
+}
+
 K on_msg_cb (int fd) {
     void *socket = sockets_by_fd[fd];
     int events = 0;
