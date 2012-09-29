@@ -181,7 +181,7 @@ K q_send (K socket_fd_k, K msg_k) {
     rc = zmq_msg_init_size(&msg, msg_k->n);
     if (rc != 0) return zrr("zmq_msg_init_size");
 
-    memcpy(zmq_msg_data (&msg), kC(msg_k), msg_k->n);
+    memcpy(zmq_msg_data(&msg), kC(msg_k), msg_k->n);
 
     rc = zmq_send(socket, &msg, 0);
     if (rc != 0) return zrr("zmq_send");
@@ -204,13 +204,23 @@ K q_version (void) {
     return version_k;
 }
 
+int counter = 0;  // XXX: ditch at some point
 K on_msg_cb (int fd) {
-    void    *socket = SOCKETS_BY_FD[fd];
-    int          rc;
-    int      events;
-    size_t      len;
-    K      result_k = NULL;
-    K           ret = NULL;
+    int       rc, events;
+    size_t len, msg_size;
+    char        *msg_str;
+    K           result_k;
+    void         *socket;
+    zmq_msg_t        msg;
+
+    socket = SOCKETS_BY_FD[fd];
+
+    if (counter++ > 5) abort();
+
+    if (socket == NULL) {
+        printf("NULL socket\n");
+        return (K)0;
+    }
 
     rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &len);
     if (rc != 0) return zrr("zmq_getsockopt");
@@ -219,24 +229,27 @@ K on_msg_cb (int fd) {
     if (!(events & ZMQ_POLLIN)) return (K)0;
 
     while (1) {
-        zmq_msg_t message;
-        rc = zmq_msg_init(&message);
+        rc = zmq_msg_init(&msg);
         if (rc != 0) return zrr("zmq_msg_init");
 
-        rc = zmq_recv(socket, &message, ZMQ_NOBLOCK);
+        rc = zmq_recv(socket, &msg, ZMQ_NOBLOCK);
         if (rc == -1 && errno == EAGAIN) break;
         if (rc != 0) return zrr("zmq_recv");
 
-        char *msg = zmq_msg_data(&message);
-        rc = zmq_msg_close(&message);
+        msg_size = zmq_msg_size(&msg);
+        msg_str  = (char*) malloc(msg_size+1);
+        msg_str[msg_size] = 0;
+        memcpy(msg_str, zmq_msg_data(&msg), msg_size);
+
+        rc = zmq_msg_close(&msg);
         if (rc != 0) return zrr("zmq_msg_close");
 
         K msg_cb_k = k(0, CB_NAME, (K)0);
         if (msg_cb_k->t == KERR) {  // msg_cb doesn't exist
-            result_k = k(0, msg, (K)0);
+            result_k = k(0, msg_str, (K)0);
         }
         else {
-            result_k = k(0, CB_NAME, kp(msg), (K)0);
+            result_k = k(0, CB_NAME, kp(msg_str), (K)0);
         }
 
         if (result_k->t == KERR) krr(result_k->s);
