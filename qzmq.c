@@ -40,7 +40,7 @@ K q_socket (K context_k, K socket_type_k) {
     if (socket == NULL) return zrr("zmq_socket");
 
     int     fd;
-    size_t len;
+    size_t len = sizeof(fd);
     int rc = zmq_getsockopt(socket, ZMQ_FD, &fd, &len);
     if (rc != 0) return zrr("zmq_sockopt");
 
@@ -206,7 +206,7 @@ K q_version (void) {
 
 int counter = 0;  // XXX: ditch at some point
 K on_msg_cb (int fd) {
-    int       rc, events;
+    int               rc;
     size_t len, msg_size;
     char        *msg_str;
     K           result_k;
@@ -222,8 +222,10 @@ K on_msg_cb (int fd) {
         return (K)0;
     }
 
-    rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &len);
-    if (rc != 0) return zrr("zmq_getsockopt");
+    uint32_t events;
+    size_t events_size = sizeof(events);
+    rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &events_size);
+    if (rc < 0) return zrr("zmq_getsockopt");
 
     // ignore everything but ZMQ_POLLIN events
     if (!(events & ZMQ_POLLIN)) return (K)0;
