@@ -54,6 +54,36 @@ K q_socket (K context_k, K socket_type_k) {
     return ki(fd);
 }
 
+K q_close (K socket_fd_k) {
+    if (socket_fd_k->t != -KI) return krr("type");
+
+    int        fd = socket_fd_k->i;
+    void  *socket = SOCKETS_BY_FD[fd];
+    void *context = CONTEXTS[0];
+
+    int rc = zmq_close(socket);
+    if (rc != 0) return zrr("zmq_close");
+
+    SOCKETS_BY_FD[fd] = NULL;
+
+    usleep(1000);
+
+    sd0(fd);
+
+    return (K)0;
+}
+
+K q_term (K context_k) {
+    if (context_k->t != -KI) return krr("type");
+
+    void *context = CONTEXTS[context_k->i];
+
+    int rc = zmq_term(context);
+    if (rc != 0) return zrr("zmq_term");
+
+    return (K)0;
+}
+
 K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
     if (socket_fd_k->t != -KI || opt_k->t != -KI ||
        (value_k->t != -KI && value_k->t != KC)) {
