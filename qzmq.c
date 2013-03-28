@@ -204,7 +204,6 @@ K q_version (void) {
     return version_k;
 }
 
-int counter = 0;  // XXX: ditch at some point
 K on_msg_cb (int fd) {
     int               rc;
     size_t len, msg_size;
@@ -215,27 +214,21 @@ K on_msg_cb (int fd) {
 
     socket = SOCKETS_BY_FD[fd];
 
-    if (counter++ > 5) abort();
-
-    if (socket == NULL) {
-        printf("NULL socket\n");
-        return (K)0;
-    }
-
     uint32_t events;
     size_t events_size = sizeof(events);
-    rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &events_size);
-    if (rc < 0) return zrr("zmq_getsockopt");
-
-    // ignore everything but ZMQ_POLLIN events
-    if (!(events & ZMQ_POLLIN)) return (K)0;
 
     while (1) {
+        // read until there's no more pollin event
+        rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &events_size);
+        if (rc < 0) return zrr("zmq_getsockopt");
+        if (!(events & ZMQ_POLLIN)) {
+            break;
+        }
+
         rc = zmq_msg_init(&msg);
         if (rc != 0) return zrr("zmq_msg_init");
 
         rc = zmq_recv(socket, &msg, ZMQ_NOBLOCK);
-        if (rc == -1 && errno == EAGAIN) break;
         if (rc != 0) return zrr("zmq_recv");
 
         msg_size = zmq_msg_size(&msg);
