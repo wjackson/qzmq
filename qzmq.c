@@ -23,6 +23,14 @@ static K zrr (char *err_label) {
     return krr(err_str);
 }
 
+char* ktos (K k) {
+    char *a = malloc(sizeof(char) * (k->n+1));
+    a[k->n] = '\0';
+    memcpy(a, kC(k), k->n);
+
+    return a;
+}
+
 K q_init (K thread_count_k) {
     if (thread_count_k->t != -KI) return krr("type");
 
@@ -143,8 +151,10 @@ K q_bind (K socket_fd_k, K endpoint_k) {
     if (socket_fd_k->t != -KI || endpoint_k->t != KC) return krr("type");
 
     void *socket = SOCKETS_BY_FD[socket_fd_k->i];
+    char *endpoint = ktos(endpoint_k);
 
-    int rc = zmq_bind(socket, (char *) kC(endpoint_k));
+    int rc = zmq_bind(socket, endpoint);
+    free(endpoint);
     if (rc == -1) return zrr("zmq_bind");
 
     return (K)0;
@@ -154,8 +164,10 @@ K q_connect (K socket_fd_k, K endpoint_k) {
     if (socket_fd_k->t != -KI || endpoint_k->t != KC) return krr("type");
 
     void *socket = SOCKETS_BY_FD[socket_fd_k->i];
+    char *endpoint = ktos(endpoint_k);
 
-    int rc = zmq_connect(socket, (char *) kC(endpoint_k));
+    int rc = zmq_connect(socket, endpoint);
+    free(endpoint);
     if (rc == -1) return zrr("zmq_connect");
 
     return (K)0;
