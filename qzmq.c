@@ -31,11 +31,9 @@ char* ktos (K k) {
     return a;
 }
 
-K q_init (K thread_count_k) {
-    if (thread_count_k->t != -KJ) return krr("type");
-
-    void *context = zmq_init(thread_count_k->j);
-    if (context == NULL) return zrr("zmq_init");
+K q_ctx_new (K x) {
+    void *context = zmq_ctx_new();
+    if (context == NULL) return zrr("zmq_ctx_new");
 
     CONTEXTS = (void**) realloc(CONTEXTS, (CONTEXT_COUNT+1) * sizeof(void*));
     CONTEXTS[CONTEXT_COUNT] = context;
@@ -82,13 +80,27 @@ K q_close (K socket_fd_k) {
     return (K)0;
 }
 
-K q_term (K context_k) {
+K q_ctx_destroy (K context_k) {
     if (context_k->t != -KJ) return krr("type");
 
     void *context = CONTEXTS[context_k->j];
 
-    int rc = zmq_term(context);
-    if (rc == -1) return zrr("zmq_term");
+    int rc = zmq_ctx_destroy(context);
+    if (rc == -1) return zrr("ctx_destroy");
+
+    return (K)0;
+}
+
+K q_ctx_set (K context_k, K opt_k, K value_k) {
+    if (context_k->t != -KJ || opt_k->t != -KI ||
+       (value_k->t != -KJ && value_k->t != KC)) {
+        return krr("type");
+    }
+
+    void *context = CONTEXTS[context_k->j];
+
+    int rc = zmq_ctx_set(context, opt_k->i, value_k->j);
+    if (rc == -1) return zrr("zmq_ctx_set");
 
     return (K)0;
 }
@@ -107,9 +119,27 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
     int        i;
 
     switch(opt_k->i) {
+        case ZMQ_RCVHWM:
+        case ZMQ_SNDHWM:
+        case ZMQ_RATE:
+        case ZMQ_RECOVERY_IVL:
+        case ZMQ_SNDBUF:
+        case ZMQ_RCVBUF:
         case ZMQ_LINGER:
         case ZMQ_RECONNECT_IVL:
+        case ZMQ_RECONNECT_IVL_MAX:
         case ZMQ_BACKLOG:
+        case ZMQ_MULTICAST_HOPS:
+        case ZMQ_RCVTIMEO:
+        case ZMQ_SNDTIMEO:
+        case ZMQ_IPV4ONLY:
+        case ZMQ_DELAY_ATTACH_ON_CONNECT:
+        case ZMQ_XPUB_VERBOSE:
+        case ZMQ_TCP_KEEPALIVE:
+        case ZMQ_TCP_KEEPALIVE_IDLE:
+        case ZMQ_TCP_KEEPALIVE_CNT:
+        case ZMQ_TCP_KEEPALIVE_INTVL:
+        case ZMQ_TCP_ACCEPT_FILTER:
             i  = value_k->i;
             rc = zmq_setsockopt(socket, opt_k->i, &i, sizeof(int));
             break;
@@ -120,26 +150,15 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
             rc  = zmq_setsockopt(socket, opt_k->i, kC(value_k), value_k->n);
             break;
 
-        case ZMQ_SWAP:
-        case ZMQ_RATE:
-        case ZMQ_RECOVERY_IVL:
-        case ZMQ_RECOVERY_IVL_MSEC:
-        case ZMQ_MCAST_LOOP:
+        case ZMQ_MAXMSGSIZE:
             i64 = value_k->j;
             rc  = zmq_setsockopt(socket, opt_k->i, &i64, sizeof(int64_t));
             break;
 
-        case ZMQ_HWM:
         case ZMQ_AFFINITY:
-        case ZMQ_SNDBUF:
-        case ZMQ_RCVBUF:
             u64 = value_k->j;
             rc  = zmq_setsockopt(socket, opt_k->i, &u64, sizeof(uint64_t));
             break;
-
-        default:
-            // Unknown sockopt
-            return krr("zmq_setsockopt");
     }
 
     if (rc == -1) return zrr("zmq_setsockopt");
@@ -179,17 +198,8 @@ K q_send (K socket_fd_k, K msg_k) {
     int       rc;
     void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
-    zmq_msg_t msg;
-    rc = zmq_msg_init_size(&msg, msg_k->n);
-    if (rc == -1) return zrr("zmq_msg_init_size");
-
-    memcpy(zmq_msg_data(&msg), kC(msg_k), msg_k->n);
-
-    rc = zmq_send(socket, &msg, 0);
+    rc = zmq_send(socket, kC(msg_k), msg_k->n, 0);
     if (rc == -1) return zrr("zmq_send");
-
-    rc = zmq_msg_close(&msg);
-    if (rc == -1) return zrr("zmq_msg_close");
 
     return (K)0;
 }
@@ -207,12 +217,12 @@ K q_version (void) {
 }
 
 K on_msg_cb (int fd) {
-    int               rc;
-    size_t      msg_size;
-    char        *msg_str;
-    K           result_k;
-    void         *socket;
-    zmq_msg_t        msg;
+    int             rc;
+    K         result_k;
+    void       *socket;
+    size_t    msg_size;
+    char      *msg_str;
+    zmq_msg_t      msg;
 
     socket = SOCKETS_BY_FD[fd];
 
@@ -222,7 +232,7 @@ K on_msg_cb (int fd) {
     while (1) {
         // read until there's no more pollin event
         rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &events_size);
-        if (rc < 0) return zrr("zmq_getsockopt");
+        if (rc == -1) return zrr("zmq_getsockopt");
         if (!(events & ZMQ_POLLIN)) {
             break;
         }
@@ -230,8 +240,8 @@ K on_msg_cb (int fd) {
         rc = zmq_msg_init(&msg);
         if (rc == -1) return zrr("zmq_msg_init");
 
-        rc = zmq_recv(socket, &msg, ZMQ_NOBLOCK);
-        if (rc == -1) return zrr("zmq_recv");
+        rc = zmq_msg_recv(&msg, socket, ZMQ_DONTWAIT);
+        if (rc == -1) return zrr("zmq_msg_recv");
 
         msg_size = zmq_msg_size(&msg);
         msg_str  = (char*) malloc(msg_size+1);
