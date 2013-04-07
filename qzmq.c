@@ -1,12 +1,14 @@
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <errno.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <k.h>
 #include <zmq.h>
-#include "qzmq.h"
 
 void      **CONTEXTS = NULL;
 int    CONTEXT_COUNT = 0;
@@ -31,6 +33,8 @@ K q_init (K thread_count_k) {
     CONTEXTS[CONTEXT_COUNT] = context;
     return ki(CONTEXT_COUNT++);
 }
+
+K on_msg_cb (int);
 
 K q_socket (K context_k, K socket_type_k) {
     if (context_k->t != -KI || socket_type_k->t != -KI) return krr("type");
@@ -126,8 +130,8 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
             break;
 
         default:
-            warn("Unknown sockopt type %d, assuming string.", opt_k->i);
-            rc  = zmq_setsockopt(socket, opt_k->i, kC(value_k), value_k->n);
+            // Unknown sockopt
+            return krr("zmq_setsockopt");
     }
 
     if (rc == -1) return zrr("zmq_setsockopt");
@@ -138,15 +142,8 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
 K q_bind (K socket_fd_k, K endpoint_k) {
     if (socket_fd_k->t != -KI || endpoint_k->t != KC) return krr("type");
 
-    int       fd = socket_fd_k->i;
     void *socket = SOCKETS_BY_FD[socket_fd_k->i];
 
-    char endpoint[endpoint_k->n+1];
-    endpoint[endpoint_k->n] = '\0';
-    strncpy(endpoint, kC(endpoint_k), endpoint_k->n);
-
-    int rc = zmq_bind(socket, endpoint);
-    if (rc != 0) return zrr("zmq_bind");
     int rc = zmq_bind(socket, (char *) kC(endpoint_k));
     if (rc == -1) return zrr("zmq_bind");
 
@@ -156,15 +153,8 @@ K q_bind (K socket_fd_k, K endpoint_k) {
 K q_connect (K socket_fd_k, K endpoint_k) {
     if (socket_fd_k->t != -KI || endpoint_k->t != KC) return krr("type");
 
-    int       fd = socket_fd_k->i;
     void *socket = SOCKETS_BY_FD[socket_fd_k->i];
 
-    char endpoint[endpoint_k->n+1];
-    endpoint[endpoint_k->n] = '\0';
-    strncpy(endpoint, kC(endpoint_k), endpoint_k->n);
-
-    int rc = zmq_connect(socket, endpoint);
-    if (rc != 0) return zrr("zmq_connect");
     int rc = zmq_connect(socket, (char *) kC(endpoint_k));
     if (rc == -1) return zrr("zmq_connect");
 
@@ -175,7 +165,6 @@ K q_send (K socket_fd_k, K msg_k) {
     if (socket_fd_k->t != -KI || msg_k->t != KC) return krr("type");
 
     int       rc;
-    int       fd = socket_fd_k->i;
     void *socket = SOCKETS_BY_FD[socket_fd_k->i];
 
     zmq_msg_t msg;
@@ -207,7 +196,7 @@ K q_version (void) {
 
 K on_msg_cb (int fd) {
     int               rc;
-    size_t len, msg_size;
+    size_t      msg_size;
     char        *msg_str;
     K           result_k;
     void         *socket;
@@ -247,6 +236,7 @@ K on_msg_cb (int fd) {
         else {
             result_k = k(0, CB_NAME, kp(msg_str), (K)0);
         }
+        free(msg_str);
 
         if (result_k->t == KERR) krr(result_k->s);
 
