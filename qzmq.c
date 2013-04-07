@@ -42,7 +42,7 @@ K q_socket (K context_k, K socket_type_k) {
     int     fd;
     size_t len = sizeof(fd);
     int rc = zmq_getsockopt(socket, ZMQ_FD, &fd, &len);
-    if (rc != 0) return zrr("zmq_sockopt");
+    if (rc == -1) return zrr("zmq_sockopt");
 
     MAX_FD = MAX_FD > fd ? MAX_FD : fd;
     SOCKETS_BY_FD = (void **) realloc(SOCKETS_BY_FD, (MAX_FD+1) * sizeof(void*));
@@ -63,7 +63,7 @@ K q_close (K socket_fd_k) {
     sd0x(fd, 0); // remove the fd from the event loop
 
     int rc = zmq_close(socket);
-    if (rc != 0) return zrr("zmq_close");
+    if (rc == -1) return zrr("zmq_close");
 
     SOCKETS_BY_FD[fd] = NULL;
 
@@ -76,7 +76,7 @@ K q_term (K context_k) {
     void *context = CONTEXTS[context_k->i];
 
     int rc = zmq_term(context);
-    if (rc != 0) return zrr("zmq_term");
+    if (rc == -1) return zrr("zmq_term");
 
     return (K)0;
 }
@@ -130,7 +130,7 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
             rc  = zmq_setsockopt(socket, opt_k->i, kC(value_k), value_k->n);
     }
 
-    if (rc != 0) return zrr("zmq_setsockopt");
+    if (rc == -1) return zrr("zmq_setsockopt");
 
     return (K)0;
 }
@@ -147,6 +147,8 @@ K q_bind (K socket_fd_k, K endpoint_k) {
 
     int rc = zmq_bind(socket, endpoint);
     if (rc != 0) return zrr("zmq_bind");
+    int rc = zmq_bind(socket, (char *) kC(endpoint_k));
+    if (rc == -1) return zrr("zmq_bind");
 
     return (K)0;
 }
@@ -163,6 +165,8 @@ K q_connect (K socket_fd_k, K endpoint_k) {
 
     int rc = zmq_connect(socket, endpoint);
     if (rc != 0) return zrr("zmq_connect");
+    int rc = zmq_connect(socket, (char *) kC(endpoint_k));
+    if (rc == -1) return zrr("zmq_connect");
 
     return (K)0;
 }
@@ -176,15 +180,15 @@ K q_send (K socket_fd_k, K msg_k) {
 
     zmq_msg_t msg;
     rc = zmq_msg_init_size(&msg, msg_k->n);
-    if (rc != 0) return zrr("zmq_msg_init_size");
+    if (rc == -1) return zrr("zmq_msg_init_size");
 
     memcpy(zmq_msg_data(&msg), kC(msg_k), msg_k->n);
 
     rc = zmq_send(socket, &msg, 0);
-    if (rc != 0) return zrr("zmq_send");
+    if (rc == -1) return zrr("zmq_send");
 
     rc = zmq_msg_close(&msg);
-    if (rc != 0) return zrr("zmq_msg_close");
+    if (rc == -1) return zrr("zmq_msg_close");
 
     return (K)0;
 }
@@ -223,10 +227,10 @@ K on_msg_cb (int fd) {
         }
 
         rc = zmq_msg_init(&msg);
-        if (rc != 0) return zrr("zmq_msg_init");
+        if (rc == -1) return zrr("zmq_msg_init");
 
         rc = zmq_recv(socket, &msg, ZMQ_NOBLOCK);
-        if (rc != 0) return zrr("zmq_recv");
+        if (rc == -1) return zrr("zmq_recv");
 
         msg_size = zmq_msg_size(&msg);
         msg_str  = (char*) malloc(msg_size+1);
@@ -234,7 +238,7 @@ K on_msg_cb (int fd) {
         memcpy(msg_str, zmq_msg_data(&msg), msg_size);
 
         rc = zmq_msg_close(&msg);
-        if (rc != 0) return zrr("zmq_msg_close");
+        if (rc == -1) return zrr("zmq_msg_close");
 
         K msg_cb_k = k(0, CB_NAME, (K)0);
         if (msg_cb_k->t == KERR) {  // msg_cb doesn't exist
