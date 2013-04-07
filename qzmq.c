@@ -59,16 +59,13 @@ K q_close (K socket_fd_k) {
 
     int        fd = socket_fd_k->i;
     void  *socket = SOCKETS_BY_FD[fd];
-    void *context = CONTEXTS[0];
+
+    sd0x(fd, 0); // remove the fd from the event loop
 
     int rc = zmq_close(socket);
     if (rc != 0) return zrr("zmq_close");
 
     SOCKETS_BY_FD[fd] = NULL;
-
-    usleep(1000);
-
-    sd0(fd);
 
     return (K)0;
 }
