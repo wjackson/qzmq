@@ -15,7 +15,8 @@ stop: { []
     value "\\\\";
  }
 
-.zmq.ps: { [msg]
+.zmq.ps: { [envelope]
+    msg: last envelope;
     $[msg ~ "test"; show `pass; show `fail];
     stop[];
  }

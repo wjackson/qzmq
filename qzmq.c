@@ -201,6 +201,11 @@ K q_send (K socket_fd_k, K msg_k) {
     int       rc;
     void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
+    // check to see if msq_k is a list. if it is then send this as a multipart
+    // message XXX
+    // or
+    // have a send_multipart function that takes list? ***
+
     rc = zmq_send(socket, kC(msg_k), msg_k->n, 0);
     if (rc == -1) return zrr("zmq_send");
 
@@ -219,12 +224,14 @@ K q_version (void) {
 }
 
 K on_msg_cb (int fd) {
-    int             rc;
-    K         result_k;
-    void       *socket;
-    size_t    msg_size;
-    char      *msg_str;
-    zmq_msg_t      msg;
+    int              rc, i;
+    K             result_k;
+    void           *socket;
+    size_t       part_size;
+    char         *part_buf;
+    char **envelope = NULL;
+    zmq_msg_t         part;
+    size_t  part_count = 0;
 
     socket = SOCKETS_BY_FD[fd];
 
@@ -239,31 +246,52 @@ K on_msg_cb (int fd) {
             break;
         }
 
-        rc = zmq_msg_init(&msg);
-        if (rc == -1) return zrr("zmq_msg_init");
+        // read all the message parts
+        while (1) {
+            part_count++;
+            envelope = realloc(envelope, part_count * sizeof(char*));
+            if (envelope == NULL) return krr("wsfull");
 
-        rc = zmq_msg_recv(&msg, socket, ZMQ_DONTWAIT);
-        if (rc == -1) return zrr("zmq_msg_recv");
+            rc = zmq_msg_init(&part);
+            if (rc == -1) return zrr("zmq_msg_init");
 
-        msg_size = zmq_msg_size(&msg);
-        msg_str  = malloc(msg_size+1);
-        if (msg_str == NULL) return krr("wsfull");
-        msg_str[msg_size] = 0;
-        memcpy(msg_str, zmq_msg_data(&msg), msg_size);
+            rc = zmq_msg_recv(&part, socket, ZMQ_DONTWAIT);
+            if (rc == -1) return zrr("zmq_msg_recv");
 
-        rc = zmq_msg_close(&msg);
-        if (rc == -1) return zrr("zmq_msg_close");
+            part_size = zmq_msg_size(&part);
+            part_buf  = malloc(part_size+1);
+            if (part_buf == NULL) return krr("wsfull");
+            part_buf[part_size] = 0;
+            memcpy(part_buf, zmq_msg_data(&part), part_size);
+
+            rc = zmq_msg_close(&part);
+            if (rc == -1) return zrr("zmq_msg_close");
+
+            envelope[part_count-1] = part_buf;
+
+            if (!zmq_msg_more(&part)) break;
+        }
 
         K msg_cb_k = k(0, CB_NAME, (K)0);
         if (msg_cb_k->t == KERR) {  /* msg_cb doesn't exist */
-            result_k = k(0, msg_str, (K)0);
+            result_k = k(0, envelope[part_count-1], (K)0);
         }
         else {
-            result_k = k(0, CB_NAME, kp(msg_str), (K)0);
-        }
-        free(msg_str);
+            K envelope_k = ktn(0, part_count);
+            for (i = 0; i < part_count; i++) {
+                kK(envelope_k)[i] = kp(envelope[i]);
+            }
 
-        if (result_k->t == KERR) krr(result_k->s);
+            result_k = k(0, CB_NAME, envelope_k, (K)0);
+        }
+
+        // cleanup the part buffers
+        for (i = 0; i < part_count; i++) {
+            free(envelope[i]);
+        }
+        free(envelope);
+
+        if (result_k->t == KERR) return krr(result_k->s);
 
         r0(msg_cb_k);
         r0(result_k);
