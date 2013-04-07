@@ -1,10 +1,8 @@
 \d .zmq
 
-/
-Constants
-\
+/ Constants
 
-\ Socket Types
+/ Socket Types
 ZMQ_PAIR:              0i
 ZMQ_PUB:               1i
 ZMQ_SUB:               2i
@@ -21,7 +19,7 @@ ZMQ_XREP:              ZMQ_ROUTER
 ZMQ_UPSTREAM:          ZMQ_PULL
 ZMQ_DOWNSTREAM:        ZMQ_PUSH
 
-\ Socket options.
+/ Socket options.
 ZMQ_HWM:               1i
 ZMQ_SWAP:              3i
 ZMQ_AFFINITY:          4i
@@ -43,9 +41,7 @@ ZMQ_BACKLOG:           19i
 ZMQ_RECOVERY_IVL_MSEC: 20i
 ZMQ_RECONNECT_IVL_MAX: 21i
 
-/
-Functions
-\
+/ Functions
 
 bind:        `qzmq 2:(`q_bind;2)
 close:       `qzmq 2:(`q_close;1)

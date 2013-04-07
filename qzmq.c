@@ -32,22 +32,22 @@ char* ktos (K k) {
 }
 
 K q_init (K thread_count_k) {
-    if (thread_count_k->t != -KI) return krr("type");
+    if (thread_count_k->t != -KJ) return krr("type");
 
-    void *context = zmq_init(thread_count_k->i);
+    void *context = zmq_init(thread_count_k->j);
     if (context == NULL) return zrr("zmq_init");
 
     CONTEXTS = (void**) realloc(CONTEXTS, (CONTEXT_COUNT+1) * sizeof(void*));
     CONTEXTS[CONTEXT_COUNT] = context;
-    return ki(CONTEXT_COUNT++);
+    return kj(CONTEXT_COUNT++);
 }
 
 K on_msg_cb (int);
 
 K q_socket (K context_k, K socket_type_k) {
-    if (context_k->t != -KI || socket_type_k->t != -KI) return krr("type");
+    if (context_k->t != -KJ || socket_type_k->t != -KI) return krr("type");
 
-    void *context = CONTEXTS[context_k->i];
+    void *context = CONTEXTS[context_k->j];
     void  *socket = zmq_socket(context, socket_type_k->i);
     if (socket == NULL) return zrr("zmq_socket");
 
@@ -63,13 +63,13 @@ K q_socket (K context_k, K socket_type_k) {
     // tell q to call back when the socket is readable
     sd1(-fd, on_msg_cb);
 
-    return ki(fd);
+    return kj(fd);
 }
 
 K q_close (K socket_fd_k) {
-    if (socket_fd_k->t != -KI) return krr("type");
+    if (socket_fd_k->t != -KJ) return krr("type");
 
-    int        fd = socket_fd_k->i;
+    int        fd = socket_fd_k->j;
     void  *socket = SOCKETS_BY_FD[fd];
 
     sd0x(fd, 0); // remove the fd from the event loop
@@ -83,9 +83,9 @@ K q_close (K socket_fd_k) {
 }
 
 K q_term (K context_k) {
-    if (context_k->t != -KI) return krr("type");
+    if (context_k->t != -KJ) return krr("type");
 
-    void *context = CONTEXTS[context_k->i];
+    void *context = CONTEXTS[context_k->j];
 
     int rc = zmq_term(context);
     if (rc == -1) return zrr("zmq_term");
@@ -94,12 +94,12 @@ K q_term (K context_k) {
 }
 
 K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
-    if (socket_fd_k->t != -KI || opt_k->t != -KI ||
-       (value_k->t != -KI && value_k->t != KC)) {
+    if (socket_fd_k->t != -KJ || opt_k->t != -KI ||
+       (value_k->t != -KJ && value_k->t != KC)) {
         return krr("type");
     }
 
-    int        fd = socket_fd_k->i;
+    int        fd = socket_fd_k->j;
     void  *socket = SOCKETS_BY_FD[fd];
     int       rc  = -1;
     uint64_t u64;
@@ -125,7 +125,7 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
         case ZMQ_RECOVERY_IVL:
         case ZMQ_RECOVERY_IVL_MSEC:
         case ZMQ_MCAST_LOOP:
-            i64 = (int64_t) value_k->i;
+            i64 = value_k->j;
             rc  = zmq_setsockopt(socket, opt_k->i, &i64, sizeof(int64_t));
             break;
 
@@ -133,7 +133,7 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
         case ZMQ_AFFINITY:
         case ZMQ_SNDBUF:
         case ZMQ_RCVBUF:
-            u64 = (uint64_t) value_k->i;
+            u64 = value_k->j;
             rc  = zmq_setsockopt(socket, opt_k->i, &u64, sizeof(uint64_t));
             break;
 
@@ -148,10 +148,10 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
 }
 
 K q_bind (K socket_fd_k, K endpoint_k) {
-    if (socket_fd_k->t != -KI || endpoint_k->t != KC) return krr("type");
+    if (socket_fd_k->t != -KJ || endpoint_k->t != KC) return krr("type");
 
-    void *socket = SOCKETS_BY_FD[socket_fd_k->i];
     char *endpoint = ktos(endpoint_k);
+    void *socket   = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_bind(socket, endpoint);
     free(endpoint);
@@ -161,10 +161,10 @@ K q_bind (K socket_fd_k, K endpoint_k) {
 }
 
 K q_connect (K socket_fd_k, K endpoint_k) {
-    if (socket_fd_k->t != -KI || endpoint_k->t != KC) return krr("type");
+    if (socket_fd_k->t != -KJ || endpoint_k->t != KC) return krr("type");
 
-    void *socket = SOCKETS_BY_FD[socket_fd_k->i];
     char *endpoint = ktos(endpoint_k);
+    void *socket   = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_connect(socket, endpoint);
     free(endpoint);
@@ -174,10 +174,10 @@ K q_connect (K socket_fd_k, K endpoint_k) {
 }
 
 K q_send (K socket_fd_k, K msg_k) {
-    if (socket_fd_k->t != -KI || msg_k->t != KC) return krr("type");
+    if (socket_fd_k->t != -KJ || msg_k->t != KC) return krr("type");
 
     int       rc;
-    void *socket = SOCKETS_BY_FD[socket_fd_k->i];
+    void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
     zmq_msg_t msg;
     rc = zmq_msg_init_size(&msg, msg_k->n);
