@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -18,17 +16,13 @@ char        *CB_NAME = ".zmq.ps";
 int             KERR = -128;
 
 static K zrr (char *err_label) {
-    char *err_str;
-    asprintf(&err_str, "%s: %s\n", err_label, zmq_strerror(errno));
-    return krr(err_str);
-}
+    const char *zmq_err = zmq_strerror(errno);
+    size_t err_size     = strlen(err_label) + strlen(zmq_err) + 4;
+    char *err_buf       = malloc(sizeof(char) * err_size);
+    if (err_buf == NULL) return krr("wsfull");
 
-char* ktos (K k) {
-    char *a = malloc(sizeof(char) * (k->n+1));
-    a[k->n] = '\0';
-    memcpy(a, kC(k), k->n);
-
-    return a;
+    snprintf(err_buf, err_size, "%s: %s\n", err_label, zmq_err);
+    return krr(err_buf);
 }
 
 K q_ctx_new (K x) {
@@ -67,12 +61,13 @@ K q_socket (K context_k, K socket_type_k) {
 K q_close (K socket_fd_k) {
     if (socket_fd_k->t != -KJ) return krr("type");
 
+    int        rc;
     int        fd = socket_fd_k->j;
     void  *socket = SOCKETS_BY_FD[fd];
 
     sd0x(fd, 0); // remove the fd from the event loop
 
-    int rc = zmq_close(socket);
+    rc = zmq_close(socket);
     if (rc == -1) return zrr("zmq_close");
 
     SOCKETS_BY_FD[fd] = NULL;
@@ -169,7 +164,11 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
 K q_bind (K socket_fd_k, K endpoint_k) {
     if (socket_fd_k->t != -KJ || endpoint_k->t != KC) return krr("type");
 
-    char *endpoint = ktos(endpoint_k);
+    char *endpoint = malloc(sizeof(char) * (endpoint_k->n+1));
+    if (endpoint == NULL) return krr("wsfull");
+    endpoint[endpoint_k->n] = '\0';
+    memcpy(endpoint, kC(endpoint_k), endpoint_k->n);
+
     void *socket   = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_bind(socket, endpoint);
@@ -182,7 +181,11 @@ K q_bind (K socket_fd_k, K endpoint_k) {
 K q_connect (K socket_fd_k, K endpoint_k) {
     if (socket_fd_k->t != -KJ || endpoint_k->t != KC) return krr("type");
 
-    char *endpoint = ktos(endpoint_k);
+    char *endpoint = malloc(sizeof(char) * (endpoint_k->n+1));
+    if (endpoint == NULL) return krr("wsfull");
+    endpoint[endpoint_k->n] = '\0';
+    memcpy(endpoint, kC(endpoint_k), endpoint_k->n);
+
     void *socket   = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_connect(socket, endpoint);
@@ -207,11 +210,10 @@ K q_send (K socket_fd_k, K msg_k) {
 K q_version (void) {
     int major, minor, patch;
 
-    char *version;
+    char version[16];
     zmq_version(&major, &minor, &patch);
-    asprintf(&version, "%d.%d.%d", major, minor, patch);
+    snprintf(version, 16, "%d.%d.%d", major, minor, patch);
     K version_k =  ks(version);
-    free(version);
 
     return version_k;
 }
@@ -230,7 +232,7 @@ K on_msg_cb (int fd) {
     size_t events_size = sizeof(events);
 
     while (1) {
-        // read until there's no more pollin event
+        /* read until there's no more pollin event */
         rc = zmq_getsockopt(socket, ZMQ_EVENTS, &events, &events_size);
         if (rc == -1) return zrr("zmq_getsockopt");
         if (!(events & ZMQ_POLLIN)) {
@@ -244,7 +246,8 @@ K on_msg_cb (int fd) {
         if (rc == -1) return zrr("zmq_msg_recv");
 
         msg_size = zmq_msg_size(&msg);
-        msg_str  = (char*) malloc(msg_size+1);
+        msg_str  = malloc(msg_size+1);
+        if (msg_str == NULL) return krr("wsfull");
         msg_str[msg_size] = 0;
         memcpy(msg_str, zmq_msg_data(&msg), msg_size);
 
@@ -252,7 +255,7 @@ K on_msg_cb (int fd) {
         if (rc == -1) return zrr("zmq_msg_close");
 
         K msg_cb_k = k(0, CB_NAME, (K)0);
-        if (msg_cb_k->t == KERR) {  // msg_cb doesn't exist
+        if (msg_cb_k->t == KERR) {  /* msg_cb doesn't exist */
             result_k = k(0, msg_str, (K)0);
         }
         else {
