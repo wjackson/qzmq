@@ -17,8 +17,8 @@ int             KERR = -128;
 
 static K zrr (char *err_label) {
     const char *zmq_err = zmq_strerror(errno);
-    size_t err_size     = strlen(err_label) + strlen(zmq_err) + 4;
-    char *err_buf       = malloc(sizeof(char) * err_size);
+    size_t     err_size = strlen(err_label) + strlen(zmq_err) + 4;
+    char       *err_buf = malloc(sizeof(char) * err_size);
     if (err_buf == NULL) return krr("wsfull");
 
     snprintf(err_buf, err_size, "%s: %s\n", err_label, zmq_err);
@@ -29,7 +29,7 @@ K q_ctx_new (K x) {
     void *context = zmq_ctx_new();
     if (context == NULL) return zrr("zmq_ctx_new");
 
-    CONTEXTS = (void**) realloc(CONTEXTS, (CONTEXT_COUNT+1) * sizeof(void*));
+    CONTEXTS = realloc(CONTEXTS, (CONTEXT_COUNT+1) * sizeof(void*));
     CONTEXTS[CONTEXT_COUNT] = context;
     return kj(CONTEXT_COUNT++);
 }
@@ -43,13 +43,13 @@ K q_socket (K context_k, K socket_type_k) {
     void  *socket = zmq_socket(context, socket_type_k->i);
     if (socket == NULL) return zrr("zmq_socket");
 
-    int     fd;
+    int fd;
     size_t len = sizeof(fd);
     int rc = zmq_getsockopt(socket, ZMQ_FD, &fd, &len);
     if (rc == -1) return zrr("zmq_sockopt");
 
     MAX_FD = MAX_FD > fd ? MAX_FD : fd;
-    SOCKETS_BY_FD = (void **) realloc(SOCKETS_BY_FD, (MAX_FD+1) * sizeof(void*));
+    SOCKETS_BY_FD = realloc(SOCKETS_BY_FD, (MAX_FD+1) * sizeof(void*));
     SOCKETS_BY_FD[fd] = socket;
 
     // tell q to call back when the socket is readable
@@ -61,9 +61,9 @@ K q_socket (K context_k, K socket_type_k) {
 K q_close (K socket_fd_k) {
     if (socket_fd_k->t != -KJ) return krr("type");
 
-    int        rc;
-    int        fd = socket_fd_k->j;
-    void  *socket = SOCKETS_BY_FD[fd];
+    int       rc;
+    int       fd = socket_fd_k->j;
+    void *socket = SOCKETS_BY_FD[fd];
 
     sd0x(fd, 0); // remove the fd from the event loop
 
@@ -108,10 +108,10 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
 
     int        fd = socket_fd_k->j;
     void  *socket = SOCKETS_BY_FD[fd];
-    int       rc  = -1;
-    uint64_t u64;
-    int64_t  i64;
-    int        i;
+    int        rc = -1;
+    uint64_t  u64;
+    int64_t   i64;
+    int         i;
 
     switch(opt_k->i) {
         case ZMQ_RCVHWM:
@@ -169,7 +169,7 @@ K q_bind (K socket_fd_k, K endpoint_k) {
     endpoint[endpoint_k->n] = '\0';
     memcpy(endpoint, kC(endpoint_k), endpoint_k->n);
 
-    void *socket   = SOCKETS_BY_FD[socket_fd_k->j];
+    void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_bind(socket, endpoint);
     free(endpoint);
@@ -186,7 +186,7 @@ K q_connect (K socket_fd_k, K endpoint_k) {
     endpoint[endpoint_k->n] = '\0';
     memcpy(endpoint, kC(endpoint_k), endpoint_k->n);
 
-    void *socket   = SOCKETS_BY_FD[socket_fd_k->j];
+    void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_connect(socket, endpoint);
     free(endpoint);
@@ -196,17 +196,40 @@ K q_connect (K socket_fd_k, K endpoint_k) {
 }
 
 K q_send (K socket_fd_k, K msg_k) {
-    if (socket_fd_k->t != -KJ || msg_k->t != KC) return krr("type");
+    if (socket_fd_k->t != -KJ) return krr("type");
 
-    int       rc;
+    int rc;
     void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
-    // check to see if msq_k is a list. if it is then send this as a multipart
-    // message XXX
-    // or
-    // have a send_multipart function that takes list? ***
-
     rc = zmq_send(socket, kC(msg_k), msg_k->n, 0);
+    if (rc == -1) return zrr("zmq_send");
+
+    return (K)0;
+}
+
+K q_send_multipart (K socket_fd_k, K envelope_k) {
+    if (socket_fd_k->t != -KJ || envelope_k->t != 0) return krr("type");
+
+    int i, rc;
+    K part_k;
+    void *socket = SOCKETS_BY_FD[socket_fd_k->j];
+
+    for (i = 0; i < envelope_k->n; i++) {
+        part_k = kK(envelope_k)[i];
+        if (part_k->t != KC) {
+            return krr("type");
+        }
+    }
+
+    for (i = 0; i < envelope_k->n - 1; i++) {
+        part_k = kK(envelope_k)[i];
+        rc   = zmq_send(socket, kC(part_k), part_k->n, ZMQ_SNDMORE);
+        if (rc == -1) return zrr("zmq_send");
+    }
+
+    // last part
+    part_k = kK(envelope_k)[envelope_k->n-1];
+    rc   = zmq_send(socket, kC(part_k), part_k->n, 0);
     if (rc == -1) return zrr("zmq_send");
 
     return (K)0;
@@ -224,14 +247,14 @@ K q_version (void) {
 }
 
 K on_msg_cb (int fd) {
-    int              rc, i;
-    K             result_k;
-    void           *socket;
-    size_t       part_size;
-    char         *part_buf;
-    char **envelope = NULL;
-    zmq_msg_t         part;
-    size_t  part_count = 0;
+    int             rc, i;
+    K            result_k;
+    void          *socket;
+    size_t      part_size;
+    char        *part_buf;
+    zmq_msg_t        part;
+    size_t     part_count = 0;
+    char       **envelope = NULL;
 
     socket = SOCKETS_BY_FD[fd];
 
