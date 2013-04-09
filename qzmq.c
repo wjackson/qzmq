@@ -253,7 +253,7 @@ K on_msg_cb (int fd) {
     size_t      part_size;
     char        *part_buf;
     zmq_msg_t        part;
-    size_t     part_count = 0;
+    size_t     part_count;
     char       **envelope = NULL;
 
     socket = SOCKETS_BY_FD[fd];
@@ -268,6 +268,9 @@ K on_msg_cb (int fd) {
         if (!(events & ZMQ_POLLIN)) {
             break;
         }
+
+        part_count = 0;
+        envelope   = NULL;
 
         // read all the message parts
         while (1) {
