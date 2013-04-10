@@ -80,3 +80,9 @@ setsockopt:     `qzmq 2:(`q_setsockopt;3)
 socket:         `qzmq 2:(`q_socket;2)
 /unbind:        `qzmq 2:(`q_unbind;2)
 version:        `qzmq 2:(`q_version;1)
+
+// default special variables
+.zmq.w: 0j
+.zmq.W: `long$()
+.zmq.c: 0j
+.zmq.C: `long$()

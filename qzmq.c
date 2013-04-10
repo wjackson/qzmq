@@ -305,7 +305,15 @@ K on_msg_cb (int fd) {
                 kK(envelope_k)[i] = kp(envelope[i]);
             }
 
-            result_k = k(0, CB_NAME, envelope_k, (K)0);
+            // set .zmq.w
+            snprintf(zmqw_buf, 30, ".zmq.w:%dj", fd);
+            k(0, zmqw_buf, (K)0);
+
+            k(0, CB_NAME, envelope_k, (K)0);
+
+            // unset .zmq.w
+            snprintf(zmqw_buf, 30, ".zmq.w:%dj", 0);
+            k(0, zmqw_buf, (K)0);
         }
 
         // cleanup the part buffers
