@@ -172,8 +172,8 @@ K q_bind (K socket_fd_k, K endpoint_k) {
     void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_bind(socket, endpoint);
-    free(endpoint);
     if (rc == -1) return zrr("zmq_bind");
+    free(endpoint);
 
     return (K)0;
 }
@@ -189,8 +189,8 @@ K q_connect (K socket_fd_k, K endpoint_k) {
     void *socket = SOCKETS_BY_FD[socket_fd_k->j];
 
     int rc = zmq_connect(socket, endpoint);
-    free(endpoint);
     if (rc == -1) return zrr("zmq_connect");
+    free(endpoint);
 
     return (K)0;
 }
@@ -248,13 +248,13 @@ K q_version (void) {
 
 K on_msg_cb (int fd) {
     int             rc, i;
-    K            result_k;
     void          *socket;
     size_t      part_size;
     char        *part_buf;
     zmq_msg_t        part;
     size_t     part_count;
     char       **envelope = NULL;
+    char     zmqw_buf[30] = "\0";
 
     socket = SOCKETS_BY_FD[fd];
 
@@ -299,10 +299,7 @@ K on_msg_cb (int fd) {
         }
 
         K msg_cb_k = k(0, CB_NAME, (K)0);
-        if (msg_cb_k->t == KERR) {  /* msg_cb doesn't exist */
-            result_k = k(0, envelope[part_count-1], (K)0);
-        }
-        else {
+        if (msg_cb_k->t != KERR) {  /* msg_cb doesn't exist */
             K envelope_k = ktn(0, part_count);
             for (i = 0; i < part_count; i++) {
                 kK(envelope_k)[i] = kp(envelope[i]);
@@ -317,10 +314,7 @@ K on_msg_cb (int fd) {
         }
         free(envelope);
 
-        if (result_k->t == KERR) return krr(result_k->s);
-
         r0(msg_cb_k);
-        r0(result_k);
     }
 
     return (K)0;

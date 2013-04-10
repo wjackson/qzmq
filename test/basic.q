@@ -15,7 +15,10 @@ stop: { []
     value "\\\\";
  }
 
-x: null
+/evaluate incoming messages
+.zmq.ps: { [m] value last m }
+
+x: 0
 .zmq.send[push;"x:7"]
 
 /send is async so we gotta wait before asserting
