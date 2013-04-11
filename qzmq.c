@@ -197,6 +197,23 @@ K q_connect (K socket_fd_k, K endpoint_k) {
     return (K)0;
 }
 
+K q_disconnect (K socket_fd_k, K endpoint_k) {
+    if (socket_fd_k->t != -KJ || endpoint_k->t != KC) return krr("type");
+
+    char *endpoint = malloc(sizeof(char) * (endpoint_k->n+1));
+    if (endpoint == NULL) return krr("wsfull");
+    endpoint[endpoint_k->n] = '\0';
+    memcpy(endpoint, kC(endpoint_k), endpoint_k->n);
+
+    void *socket = SOCKETS_BY_FD[socket_fd_k->j];
+
+    int rc = zmq_disconnect(socket, endpoint);
+    if (rc == -1) return zrr("zmq_disconnect");
+    free(endpoint);
+
+    return (K)0;
+}
+
 K q_send (K socket_fd_k, K msg_k) {
     if (socket_fd_k->t != -KJ) return krr("type");
 

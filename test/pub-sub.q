@@ -10,6 +10,7 @@ sub: .zmq.socket[c;.zmq.ZMQ_SUB]
 .zmq.setsockopt[sub;.zmq.ZMQ_SUBSCRIBE;""]
 
 stop: { []
+    .zmq.disconnect[sub;"ipc:///tmp/qzmq.test"];
     .zmq.close[pub];
     .zmq.close[sub];
     .zmq.ctx_destroy[c];
