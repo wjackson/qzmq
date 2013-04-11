@@ -78,7 +78,7 @@ send_multipart: `qzmq 2:(`q_send_multipart;2)
 /proxy:         `qzmq 2:(`q_proxy;2)
 setsockopt:     `qzmq 2:(`q_setsockopt;3)
 socket:         `qzmq 2:(`q_socket;2)
-/unbind:        `qzmq 2:(`q_unbind;2)
+unbind:         `qzmq 2:(`q_unbind;2)
 version:        `qzmq 2:(`q_version;1)
 
 // default special variables
