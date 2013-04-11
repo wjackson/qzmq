@@ -59,8 +59,8 @@ ZMQ_DONTWAIT: 1i
 ZMQ_SNDMORE:  2i
 
 / Context Options
-ZMQ_IO_THREADS:  1
-ZMQ_MAX_SOCKETS: 2
+ZMQ_IO_THREADS:  1i
+ZMQ_MAX_SOCKETS: 2i
 
 / Functions
 
@@ -68,7 +68,7 @@ bind:           `qzmq 2:(`q_bind;2)
 close:          `qzmq 2:(`q_close;1)
 connect:        `qzmq 2:(`q_connect;2)
 ctx_destroy:    `qzmq 2:(`q_ctx_destroy;1)
-/ctx_get:       `qzmq 2:(`q_ctx_get;2)
+ctx_get:        `qzmq 2:(`q_ctx_get;2)
 ctx_new:        `qzmq 2:(`q_ctx_new;1)
 ctx_set:        `qzmq 2:(`q_ctx_set;3)
 disconnect:     `qzmq 2:(`q_disconnect;2)

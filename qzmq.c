@@ -86,9 +86,22 @@ K q_ctx_destroy (K context_k) {
     return (K)0;
 }
 
+K q_ctx_get (K context_k, K opt_k) {
+    if (context_k->t != -KJ || opt_k->t != -KI) {
+        return krr("type");
+    }
+
+    void *context = CONTEXTS[context_k->j];
+
+    int value = zmq_ctx_get(context, opt_k->i);
+    if (value == -1) return zrr("zmq_ctx_get");
+
+    return ki(value);
+}
+
 K q_ctx_set (K context_k, K opt_k, K value_k) {
     if (context_k->t != -KJ || opt_k->t != -KI ||
-       (value_k->t != -KJ && value_k->t != KC)) {
+        value_k->t != -KJ) {
         return krr("type");
     }
 
