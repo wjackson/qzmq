@@ -128,6 +128,8 @@ K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
         case ZMQ_RCVTIMEO:
         case ZMQ_SNDTIMEO:
         case ZMQ_IPV4ONLY:
+        case ZMQ_LAST_ENDPOINT:
+        case ZMQ_ROUTER_MANDATORY:
         case ZMQ_DELAY_ATTACH_ON_CONNECT:
         case ZMQ_XPUB_VERBOSE:
         case ZMQ_TCP_KEEPALIVE:
@@ -254,7 +256,9 @@ K on_msg_cb (int fd) {
     zmq_msg_t        part;
     size_t     part_count;
     char       **envelope = NULL;
+    size_t    *envelope_s = NULL;
     char     zmqw_buf[30] = "\0";
+    K            result_k;
 
     socket = SOCKETS_BY_FD[fd];
 
@@ -271,12 +275,16 @@ K on_msg_cb (int fd) {
 
         part_count = 0;
         envelope   = NULL;
+        envelope_s = NULL;
 
         // read all the message parts
         while (1) {
             part_count++;
             envelope = realloc(envelope, part_count * sizeof(char*));
             if (envelope == NULL) return krr("wsfull");
+
+            envelope_s = realloc(envelope_s, part_count * sizeof(size_t));
+            if (envelope_s == NULL) return krr("wsfull");
 
             rc = zmq_msg_init(&part);
             if (rc == -1) return zrr("zmq_msg_init");
@@ -293,7 +301,8 @@ K on_msg_cb (int fd) {
             rc = zmq_msg_close(&part);
             if (rc == -1) return zrr("zmq_msg_close");
 
-            envelope[part_count-1] = part_buf;
+            envelope[part_count-1]   = part_buf;
+            envelope_s[part_count-1] = part_size;
 
             if (!zmq_msg_more(&part)) break;
         }
@@ -302,7 +311,7 @@ K on_msg_cb (int fd) {
         if (msg_cb_k->t != KERR) {  /* msg_cb doesn't exist */
             K envelope_k = ktn(0, part_count);
             for (i = 0; i < part_count; i++) {
-                kK(envelope_k)[i] = kp(envelope[i]);
+                kK(envelope_k)[i] = kpn(envelope[i], envelope_s[i]);
             }
 
             // set .zmq.w
@@ -321,6 +330,7 @@ K on_msg_cb (int fd) {
             free(envelope[i]);
         }
         free(envelope);
+        free(envelope_s);
 
         r0(msg_cb_k);
     }
