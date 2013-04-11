@@ -113,6 +113,76 @@ K q_ctx_set (K context_k, K opt_k, K value_k) {
     return (K)0;
 }
 
+K q_getsockopt (K socket_fd_k, K opt_k) {
+    if (socket_fd_k->t != -KJ || opt_k->t != -KI) {
+        return krr("type");
+    }
+
+    int        fd = socket_fd_k->j;
+    void  *socket = SOCKETS_BY_FD[fd];
+    int        rc = -1;
+    uint64_t  u64;
+    int64_t   i64;
+    int         i;
+    char   c[255];
+    size_t    len;
+    K       val_k;
+
+    switch(opt_k->i) {
+        case ZMQ_TYPE:
+        case ZMQ_RCVMORE:
+        case ZMQ_SNDHWM:
+        case ZMQ_RCVHWM:
+        case ZMQ_RATE:
+        case ZMQ_RECOVERY_IVL:
+        case ZMQ_SNDBUF:
+        case ZMQ_RCVBUF:
+        case ZMQ_LINGER:
+        case ZMQ_RECONNECT_IVL:
+        case ZMQ_RECONNECT_IVL_MAX:
+        case ZMQ_BACKLOG:
+        case ZMQ_MULTICAST_HOPS:
+        case ZMQ_RCVTIMEO:
+        case ZMQ_SNDTIMEO:
+        case ZMQ_IPV4ONLY:
+        case ZMQ_DELAY_ATTACH_ON_CONNECT:
+        case ZMQ_FD:
+        case ZMQ_EVENTS:
+        case ZMQ_LAST_ENDPOINT:
+        case ZMQ_TCP_KEEPALIVE:
+        case ZMQ_TCP_KEEPALIVE_IDLE:
+        case ZMQ_TCP_KEEPALIVE_CNT:
+        case ZMQ_TCP_KEEPALIVE_INTVL:
+        case ZMQ_TCP_ACCEPT_FILTER:
+            len = sizeof(i);
+            rc = zmq_getsockopt(socket, ZMQ_TYPE, &i, &len);
+            val_k = ki(i);
+            break;
+
+        case ZMQ_IDENTITY:
+            len = 255;
+            rc  = zmq_getsockopt(socket, opt_k->i, c, &len);
+            val_k = kpn(c, len);
+            break;
+
+        case ZMQ_MAXMSGSIZE:
+            len = sizeof(i64);
+            rc  = zmq_getsockopt(socket, opt_k->i, &i64, &len);
+            val_k = kj(i64);
+            break;
+
+        case ZMQ_AFFINITY:
+            len = sizeof(u64);
+            rc  = zmq_getsockopt(socket, opt_k->i, &u64, &len);
+            val_k = kj(u64);
+            break;
+    }
+
+    if (rc == -1) return zrr("zmq_getsockopt");
+
+    return val_k;
+}
+
 K q_setsockopt (K socket_fd_k, K opt_k, K value_k) {
     if (socket_fd_k->t != -KJ || opt_k->t != -KI ||
        (value_k->t != -KJ && value_k->t != KC)) {
