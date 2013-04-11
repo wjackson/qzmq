@@ -316,13 +316,20 @@ K on_msg_cb (int fd) {
 
             // set .zmq.w
             snprintf(zmqw_buf, 30, ".zmq.w:%dj", fd);
-            k(0, zmqw_buf, (K)0);
+            result_k = k(0, zmqw_buf, (K)0);
+            if (result_k->t == KERR) krr(result_k->s);
+            r0(result_k);
 
-            k(0, CB_NAME, envelope_k, (K)0);
+            // run the cb
+            result_k = k(0, CB_NAME, envelope_k, (K)0);
+            if (result_k->t == KERR) krr(result_k->s);
+            r0(result_k);
 
             // unset .zmq.w
             snprintf(zmqw_buf, 30, ".zmq.w:%dj", 0);
-            k(0, zmqw_buf, (K)0);
+            result_k = k(0, zmqw_buf, (K)0);
+            if (result_k->t == KERR) krr(result_k->s);
+            r0(result_k);
         }
 
         // cleanup the part buffers
