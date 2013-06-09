@@ -5,8 +5,8 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <k.h>
 #include <zmq.h>
+#include "k.h"
 
 void      **CONTEXTS = NULL;
 int    CONTEXT_COUNT = 0;
