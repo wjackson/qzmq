@@ -2,7 +2,7 @@
 
 ZeroMQ bindings for Q
 
-## Installing qzmq
+## Installing on Linux
 
 ```
 $ git clone https://github.com/wjackson/qzmq.git
@@ -13,6 +13,15 @@ $ cp zmq.q $QHOME
 
 Note: If you're using the demo version of q on a 64-bit platform then you'll
 want to edit the Makefile and add -m32 as an argument to the compiler.
+
+## Installing on Windows
+
+Download the appropriate binary:
+
+* [qzmq-w32.zip](http://qzmq.s3-website-us-east-1.amazonaws.com/qzmq-w32.zip)
+* [qzmq-w64.zip](http://qzmq.s3-website-us-east-1.amazonaws.com/qzmq-w64.zip)
+
+Put zmq.q in %QHOME% and the DLLs in %QHOME%/w[32|64].
 
 ## Usage
 
@@ -25,7 +34,7 @@ $ q
 q)\l zmq.q
 q)c: .zmq.ctx_new[]
 q)s: .zmq.socket[c;.zmq.ZMQ_PUSH]
-q).zmq.connect[s;"tcp://localhost:5555"]
+q).zmq.connect[s;"tcp://127.0.0.1:5555"]
 q).z.ts: {[] .zmq.send[s;"x: .z.t"]}
 q)\t 2000
 
@@ -33,7 +42,7 @@ $ q
 q)\l zmq.q
 q)c:.zmq.ctx_new[]
 q)s:.zmq.socket[c;.zmq.ZMQ_PULL]
-q).zmq.bind[s;"tcp://lo:5555"]
+q).zmq.bind[s;"tcp://127.0.0.1:5555"]
 q).zmq.ps: {[m]: show last m }
 "x: .z.t"
 "x: .z.t"
