@@ -5,13 +5,13 @@ c: .zmq.ctx_new[]
 pub: .zmq.socket[c;.zmq.ZMQ_PUB]
 sub: .zmq.socket[c;.zmq.ZMQ_SUB]
 
-.zmq.bind[pub;"ipc:///tmp/qzmq.test"]
-.zmq.connect[sub;"ipc:///tmp/qzmq.test"]
+.zmq.bind[pub;"tcp://127.0.0.1:5555"]
+.zmq.connect[sub;"tcp://127.0.0.1:5555"]
 .zmq.setsockopt[sub;.zmq.ZMQ_SUBSCRIBE;""]
 
 stop: { []
-    .zmq.unbind[pub;"ipc:///tmp/qzmq.test"]
-    .zmq.disconnect[sub;"ipc:///tmp/qzmq.test"];
+    .zmq.unbind[pub;"tcp://127.0.0.1:5555"]
+    .zmq.disconnect[sub;"tcp://127.0.0.1:5555"];
     .zmq.close[pub];
     .zmq.close[sub];
     .zmq.ctx_destroy[c];

@@ -5,8 +5,8 @@ c: .zmq.ctx_new[]
 req: .zmq.socket[c;.zmq.ZMQ_REQ]
 rep: .zmq.socket[c;.zmq.ZMQ_REP]
 
-.zmq.bind[req;"ipc:///tmp/qzmq.test"]
-.zmq.connect[rep;"ipc:///tmp/qzmq.test"]
+.zmq.bind[req;"tcp://127.0.0.1:5555"]
+.zmq.connect[rep;"tcp://127.0.0.1:5555"]
 
 stop: { []
     .zmq.close[req];

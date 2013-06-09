@@ -7,8 +7,8 @@ router: .zmq.socket[c;.zmq.ZMQ_ROUTER]
 
 .zmq.setsockopt[router;.zmq.ZMQ_ROUTER_MANDATORY;1]
 
-.zmq.connect[dealer;"ipc:///tmp/qzmq.test"]
-.zmq.bind[router;"ipc:///tmp/qzmq.test"]
+.zmq.connect[dealer;"tcp://127.0.0.1:5555"]
+.zmq.bind[router;"tcp://127.0.0.1:5555"]
 
 stop: { []
     .zmq.close[dealer];
